@@ -42,9 +42,9 @@ const WORDPRESS_URL = DEFAULT_WORDPRESS_URL.replace(/\/$/, "");
 const STEP_LABELS: Record<PipelineStep, string> = {
     idle: "",
     health: "Verificando conexión con el motor GEO...",
-    wordpress: "Auditando páginas del sitio WordPress...",
-    recommend: "Generando recomendaciones con IA...",
-    loading_review: "Preparando cola de revisión...",
+    wordpress: "Auditando páginas y generando propuestas con IA... (puede tardar 2-3 min)",
+    recommend: "Finalizando recomendaciones...",
+    loading_review: "Cargando propuestas para revisar...",
     done: "Proceso completado",
     error: "Error en el proceso",
 };

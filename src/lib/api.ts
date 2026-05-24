@@ -143,30 +143,37 @@ export async function runSiteCycle(
     });
 }
 
-/** Flujo CEO: ciclo completo del sitio WordPress con URL automática */
+/** Dispara el ciclo en background y hace polling hasta que termine */
 export async function runWordPressPipeline(): Promise<WordPressPipelineResult> {
-    const site = await runSiteCycle({
-        wordpress_url: null,
-        include_posts: true,
-        status: "publish",
-        skip_existing: true,
-    });
+    // 1. Disparar ciclo async (devuelve 202 inmediatamente)
+    await api("/agent/trigger", { method: "POST", body: JSON.stringify({}) });
 
-    return {
-        audit: {
-            source: site.source,
-            total_found: site.total_found,
-            analyzed: site.analyzed,
-            failed: site.audit_failed,
-        },
-        recommend: {
-            total_analyses: site.total_found,
-            processed: site.processed,
-            skipped: site.skipped,
-            failed: site.recommend_failed,
-            total_proposals_created: site.total_proposals_created,
-        },
-    };
+    // 2. Polling cada 5s hasta que running=false (máx 4 min)
+    const MAX_POLLS = 48;
+    for (let i = 0; i < MAX_POLLS; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const status = await api<{
+            running: boolean;
+            last_result: { analyzed: number; total_proposals_created: number } | null;
+            last_error: string | null;
+        }>("/agent/trigger/status");
+
+        if (!status.running) {
+            if (status.last_error) throw new Error(status.last_error);
+            const r = status.last_result ?? { analyzed: 0, total_proposals_created: 0 };
+            return {
+                audit: { source: "", total_found: r.analyzed, analyzed: r.analyzed, failed: 0 },
+                recommend: {
+                    total_analyses: r.analyzed,
+                    processed: r.analyzed,
+                    skipped: 0,
+                    failed: 0,
+                    total_proposals_created: r.total_proposals_created,
+                },
+            };
+        }
+    }
+    throw new Error("El ciclo tardó demasiado. Revisa el estado en el servidor.");
 }
 
 export async function analyzeWordPressPages(
