@@ -282,3 +282,35 @@ export type PipelineStep =
     | "loading_review"
     | "done"
     | "error";
+
+// ── Schedules ────────────────────────────────────────────────────────────────
+
+export interface ScheduleConfig {
+    id: number;
+    url: string;
+    interval_minutes: number;
+    is_active: boolean;
+    last_run_at: string | null;
+    last_run_status: "success" | "error" | null;
+    last_run_error: string | null;
+    next_run_at: string | null;
+    created_at: string;
+}
+
+export interface ScheduleListResponse {
+    items: ScheduleConfig[];
+    total: number;
+}
+
+export interface ScheduleToggleResponse {
+    id: number;
+    is_active: boolean;
+    message: string;
+    next_run_at: string | null;
+}
+
+export interface ScheduleRunNowResponse {
+    message: string;
+    analysis_id: number;
+    proposals_count: number;
+}

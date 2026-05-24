@@ -14,6 +14,10 @@ import type {
     RunFullCycleResponse,
     RunSiteCycleRequest,
     RunSiteCycleResponse,
+    ScheduleConfig,
+    ScheduleListResponse,
+    ScheduleRunNowResponse,
+    ScheduleToggleResponse,
     WordPressPagesResponse,
     WordPressPipelineResult,
 } from "./types";
@@ -376,4 +380,42 @@ export async function measureImpact(
 
 export async function getGscOpportunities() {
     return api("/gsc/opportunities");
+}
+
+// ── Schedules ────────────────────────────────────────────────────────────────
+
+export async function listSchedules(): Promise<ScheduleListResponse> {
+    return api<ScheduleListResponse>("/agent/schedules");
+}
+
+export async function createSchedule(
+    url: string,
+    interval_minutes: number,
+): Promise<ScheduleConfig> {
+    return api<ScheduleConfig>("/agent/schedules", {
+        method: "POST",
+        body: JSON.stringify({ url, interval_minutes }),
+    });
+}
+
+export async function pauseSchedule(id: number): Promise<ScheduleToggleResponse> {
+    return api<ScheduleToggleResponse>(`/agent/schedules/${id}/pause`, {
+        method: "POST",
+    });
+}
+
+export async function resumeSchedule(id: number): Promise<ScheduleToggleResponse> {
+    return api<ScheduleToggleResponse>(`/agent/schedules/${id}/resume`, {
+        method: "POST",
+    });
+}
+
+export async function deleteSchedule(id: number): Promise<void> {
+    await api(`/agent/schedules/${id}`, { method: "DELETE" });
+}
+
+export async function runScheduleNow(id: number): Promise<ScheduleRunNowResponse> {
+    return api<ScheduleRunNowResponse>(`/agent/schedules/${id}/run-now`, {
+        method: "POST",
+    });
 }

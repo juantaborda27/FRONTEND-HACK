@@ -15,6 +15,7 @@ import {
 
 import AnalysesTable from "./AnalysesTable";
 import ProposalEditor from "./ProposalEditor";
+import SchedulesPanel from "./SchedulesPanel";
 
 import type {
     AnalysisItem,
@@ -333,6 +334,8 @@ export default function Dashboard() {
                         pendingCount={pendingCount}
                         hasImpact={!!impact}
                     />
+
+                    <SchedulesPanel />
                 </aside>
             </div>
         </main>
