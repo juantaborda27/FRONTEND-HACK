@@ -11,8 +11,7 @@ export async function analyzeUrl(url: string): Promise<AnalyzeResponse> {
         body: JSON.stringify({ url }),
     });
 
-    console.log("Response status:", res.status);
-    console.log("Response body:", await res.json());
+    
 
     if (!res.ok) {
         throw new Error("Error analizando URL");

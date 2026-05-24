@@ -266,6 +266,8 @@ export default function Dashboard({ initialData }: Props) {
                                 </p>
                             </div>
 
+                            
+
                             {/* GRID */}
                             <div className="grid gap-5 md:grid-cols-2">
                                 <InfoBlock
@@ -337,6 +339,23 @@ export default function Dashboard({ initialData }: Props) {
                             </p>
                         </div>
                     )}
+
+                    {
+                        url && (
+                            <div className="mt-6 overflow-hidden rounded-3xl border border-[#d9dceb] bg-white shadow-sm">
+                                <div className="border-b border-[#e5e8f3] bg-[#f8faff] px-4 py-3">
+                                    <p className="text-sm font-semibold text-[#1b1f8a]">
+                                        Previsualización del sitio
+                                    </p>
+                                </div>
+
+                                <iframe
+                                    src={url}
+                                    className="h-[500px] w-full"
+                                />
+                            </div>
+                        )
+                    }
                 </section>
 
                 {/* SIDEBAR */}
