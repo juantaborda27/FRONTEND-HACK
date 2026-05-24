@@ -143,9 +143,9 @@ export async function runSiteCycle(
     });
 }
 
-/** Dispara el ciclo en background — devuelve 202 inmediatamente */
-export async function triggerCycle(): Promise<void> {
-    await api("/agent/trigger", { method: "POST", body: JSON.stringify({}) });
+/** Dispara el ciclo de UNA URL en background — devuelve 202 inmediatamente */
+export async function triggerCycle(url: string = DEFAULT_WORDPRESS_URL): Promise<void> {
+    await api("/agent/trigger", { method: "POST", body: JSON.stringify({ url }) });
 }
 
 /** Estado del ciclo en background */

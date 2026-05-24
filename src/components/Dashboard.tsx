@@ -68,6 +68,7 @@ export default function Dashboard() {
 
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    const [auditUrl, setAuditUrl] = useState("https://www.bancoserfinanza.com/");
 
     // Ref para el intervalo de polling — no recrea el componente
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -139,9 +140,9 @@ export default function Dashboard() {
             await checkHealth();
             setApiOnline(true);
 
-            // Paso 2 — disparar ciclo (devuelve 202 inmediato)
+            // Paso 2 — disparar ciclo de UNA URL (devuelve 202 inmediato)
             setPipelineStep("wordpress");
-            await triggerCycle();
+            await triggerCycle(auditUrl);
 
             // Paso 3 — polling cada 5s hasta que el backend termine
             setPipelineStep("recommend");
@@ -273,6 +274,8 @@ export default function Dashboard() {
                         pipelineStep={pipelineStep}
                         error={error}
                         success={success}
+                        auditUrl={auditUrl}
+                        onAuditUrlChange={setAuditUrl}
                         onRunPipeline={handleRunPipeline}
                     />
                     <div className="grid gap-5">
@@ -398,12 +401,16 @@ function HeroPanel({
     pipelineStep,
     error,
     success,
+    auditUrl,
+    onAuditUrlChange,
     onRunPipeline,
 }: {
     isBusy: boolean;
     pipelineStep: PipelineStep;
     error: string | null;
     success: string | null;
+    auditUrl: string;
+    onAuditUrlChange: (v: string) => void;
     onRunPipeline: () => void;
 }) {
     return (
@@ -418,25 +425,30 @@ function HeroPanel({
             </h1>
 
             <p className="mt-5 max-w-2xl text-lg leading-8 text-[#5f6786]">
-                Un solo clic audita todo el sitio WordPress, genera
-                recomendaciones con IA y prepara la cola de aprobación para
-                publicar en Serfinanza.
+                Ingresa una URL, audita con IA y genera propuestas de contenido
+                listas para publicar en WordPress.
             </p>
 
-            <div className="mt-8">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <input
+                    type="url"
+                    value={auditUrl}
+                    onChange={(e) => onAuditUrlChange(e.target.value)}
+                    disabled={isBusy}
+                    placeholder="https://www.bancoserfinanza.com/"
+                    className="flex-1 rounded-2xl border border-[#d9dceb] px-5 py-4 text-sm text-[#1b1f8a] focus:border-[#1b1f8a] focus:outline-none disabled:opacity-60"
+                />
                 <button
                     onClick={onRunPipeline}
-                    disabled={isBusy}
-                    className="inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-[#d7264f] px-8 py-5 text-lg font-semibold text-white shadow-lg transition hover:bg-[#bc1f44] disabled:opacity-60 sm:w-auto"
+                    disabled={isBusy || !auditUrl}
+                    className="inline-flex items-center justify-center gap-3 rounded-2xl bg-[#0170B9] px-8 py-4 text-base font-semibold text-white shadow-lg transition hover:bg-[#015a94] disabled:opacity-60"
                 >
                     {isBusy ? (
-                        <Loader2 className="h-6 w-6 animate-spin" />
+                        <Loader2 className="h-5 w-5 animate-spin" />
                     ) : (
-                        <Zap className="h-6 w-6" />
+                        <Zap className="h-5 w-5" />
                     )}
-                    {isBusy
-                        ? STEP_LABELS[pipelineStep] || "Procesando..."
-                        : "Auditar y optimizar sitio"}
+                    {isBusy ? STEP_LABELS[pipelineStep] || "Procesando..." : "Auditar"}
                 </button>
             </div>
 
