@@ -25,7 +25,14 @@ const SEVERITY_LABEL: Record<string, string> = {
     high: "Alta",
     medium: "Media",
     low: "Baja",
+    HIGH: "Alta",
+    MEDIUM: "Media",
+    LOW: "Baja",
 };
+
+function normalizeSeverity(severity: string): string {
+    return severity.toLowerCase();
+}
 
 const TYPE_LABEL: Record<string, string> = {
     BLOG_POST: "Artículo blog",
@@ -75,10 +82,11 @@ export default function ProposalEditor({
         );
     }
 
+    const sev = normalizeSeverity(String(preview.severity));
     const severityCls =
-        preview.severity === "high"
+        sev === "high"
             ? "bg-red-500/30 text-red-100"
-            : preview.severity === "medium"
+            : sev === "medium"
               ? "bg-amber-500/30 text-amber-100"
               : "bg-white/20 text-white/90";
 
@@ -136,7 +144,10 @@ function Badges({
             <span
                 className={`rounded-full px-3 py-1 text-xs font-semibold ${severityCls}`}
             >
-                Prioridad {SEVERITY_LABEL[preview.severity] ?? preview.severity}
+                Prioridad{" "}
+                {SEVERITY_LABEL[preview.severity] ??
+                    SEVERITY_LABEL[normalizeSeverity(String(preview.severity))] ??
+                    preview.severity}
             </span>
             {preview.pending_count > 0 ? (
                 <span className="rounded-full bg-[#d7264f] px-3 py-1 text-xs font-semibold">

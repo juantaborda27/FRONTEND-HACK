@@ -12,12 +12,16 @@ import type {
     RecommendAllResponse,
     RecommendResponse,
     RunFullCycleResponse,
+    RunSiteCycleRequest,
+    RunSiteCycleResponse,
     WordPressPagesResponse,
+    WordPressPipelineResult,
 } from "./types";
 
-const RAW_API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const DEFAULT_WORDPRESS_URL =
+export const DEFAULT_WORDPRESS_URL =
     "https://wordpress-production-d55e.up.railway.app/";
+
+const RAW_API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /** Normaliza base URL: trim, sin slash final, puerto numérico válido */
 function normalizeApiBase(raw: string): string {
@@ -47,6 +51,24 @@ function buildApiUrl(path: string): string {
 
 const AI_TIMEOUT_MS = 120_000;
 
+function parseApiError(status: number, err: { detail?: unknown }): Error {
+    const detail =
+        typeof err.detail === "string"
+            ? err.detail
+            : Array.isArray(err.detail)
+              ? err.detail.map((d) => String(d)).join(", ")
+              : "Error de API";
+
+    if (
+        status === 429 ||
+        /gemini|cuota|quota|rate limit/i.test(detail)
+    ) {
+        return new Error(detail);
+    }
+
+    return new Error(detail);
+}
+
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
@@ -63,16 +85,7 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
 
         if (!res.ok) {
             const err = await res.json().catch(() => ({ detail: res.statusText }));
-
-            if (res.status === 429) {
-                throw new Error("Cuota IA agotada, intenta más tarde");
-            }
-
-            throw new Error(
-                typeof err.detail === "string"
-                    ? err.detail
-                    : "Error de API",
-            );
+            throw parseApiError(res.status, err);
         }
 
         return res.json();
@@ -101,28 +114,82 @@ export async function analyzeUrl(url: string): Promise<AnalyzeResponse> {
     });
 }
 
+/** Una URL → scrape + score + probe + propuestas */
+export async function runFullCycle(
+    url: string = DEFAULT_WORDPRESS_URL,
+): Promise<RunFullCycleResponse> {
+    return api<RunFullCycleResponse>("/agent/run-full-cycle", {
+        method: "POST",
+        body: JSON.stringify({ url }),
+    });
+}
+
+/** Todo el WordPress → audita páginas/posts y genera propuestas */
+export async function runSiteCycle(
+    options: RunSiteCycleRequest = {},
+): Promise<RunSiteCycleResponse> {
+    return api<RunSiteCycleResponse>("/agent/run-site-cycle", {
+        method: "POST",
+        body: JSON.stringify({
+            wordpress_url: options.wordpress_url ?? null,
+            include_posts: options.include_posts ?? true,
+            status: options.status ?? "publish",
+            skip_existing: options.skip_existing ?? true,
+        }),
+    });
+}
+
+/** Flujo CEO: ciclo completo del sitio WordPress con URL automática */
+export async function runWordPressPipeline(): Promise<WordPressPipelineResult> {
+    const site = await runSiteCycle({
+        wordpress_url: null,
+        include_posts: true,
+        status: "publish",
+        skip_existing: true,
+    });
+
+    return {
+        audit: {
+            source: site.source,
+            total_found: site.total_found,
+            analyzed: site.analyzed,
+            failed: site.audit_failed,
+        },
+        recommend: {
+            total_analyses: site.total_found,
+            processed: site.processed,
+            skipped: site.skipped,
+            failed: site.recommend_failed,
+            total_proposals_created: site.total_proposals_created,
+        },
+    };
+}
+
 export async function analyzeWordPressPages(
     wordpressUrl?: string,
     includePosts = true,
 ): Promise<WordPressPagesResponse> {
-    void includePosts;
-    const url = wordpressUrl ?? DEFAULT_WORDPRESS_URL;
-    const cycle = await runFullCycle(url);
-    const analyses = await listAnalyses();
+    const site = await runSiteCycle({
+        wordpress_url: wordpressUrl ?? null,
+        include_posts: includePosts,
+        status: "publish",
+        skip_existing: true,
+    });
+
     return {
-        source: url,
-        total_found: analyses.total,
-        analyzed: analyses.total,
-        failed: 0,
-        results: analyses.items.map((item) => ({
-            analysis_id: item.id,
-            url: item.url,
+        source: site.source,
+        total_found: site.total_found,
+        analyzed: site.analyzed,
+        failed: site.audit_failed,
+        results: site.audit_results.map((r) => ({
+            analysis_id: r.analysis_id,
+            url: r.url,
             wp_id: 0,
-            wp_title: item.url,
+            wp_title: r.url,
             content_type: "page",
-            seo_score: item.seo_score,
-            geo_score: item.geo_score,
-            status: item.status,
+            seo_score: r.seo_score,
+            geo_score: r.geo_score,
+            status: r.status,
         })),
     };
 }
@@ -165,70 +232,28 @@ export async function generateRecommendations(
 export async function recommendAll(
     skipExisting = true,
 ): Promise<RecommendAllResponse> {
-    const { items, total } = await listAnalyses(50);
-    let totalProposals = 0;
-    let processed = 0;
-    let skipped = 0;
-    let failed = 0;
-    const results: RecommendAllResponse["results"] = [];
-
-    for (const item of items) {
-        if (skipExisting) {
-            const detail = await getAnalysis(item.id);
-            if (detail.proposals.length > 0) {
-                skipped++;
-                results.push({
-                    analysis_id: item.id,
-                    url: item.url,
-                    proposals_created: 0,
-                    proposals: [],
-                    skipped: true,
-                    error: null,
-                });
-                continue;
-            }
-        }
-
-        try {
-            const rec = await generateRecommendations(item.id);
-            totalProposals += rec.proposals_created;
-            processed++;
-            results.push({
-                analysis_id: item.id,
-                url: item.url,
-                proposals_created: rec.proposals_created,
-                proposals: rec.proposals,
-                skipped: false,
-                error: null,
-            });
-        } catch (e) {
-            failed++;
-            results.push({
-                analysis_id: item.id,
-                url: item.url,
-                proposals_created: 0,
-                proposals: [],
-                skipped: false,
-                error: e instanceof Error ? e.message : "Error",
-            });
-        }
-    }
+    const site = await runSiteCycle({
+        wordpress_url: null,
+        include_posts: true,
+        status: "publish",
+        skip_existing: skipExisting,
+    });
 
     return {
-        total_analyses: total,
-        processed,
-        skipped,
-        failed,
-        total_proposals_created: totalProposals,
-        results,
+        total_analyses: site.total_found,
+        processed: site.processed,
+        skipped: site.skipped,
+        failed: site.recommend_failed,
+        total_proposals_created: site.total_proposals_created,
+        results: site.recommend_results.map((r) => ({
+            analysis_id: r.analysis_id,
+            url: r.url,
+            proposals_created: r.proposals_created,
+            proposals: r.proposals,
+            skipped: r.skipped,
+            error: r.error,
+        })),
     };
-}
-
-export async function runFullCycle(url: string): Promise<RunFullCycleResponse> {
-    return api<RunFullCycleResponse>("/agent/run-full-cycle", {
-        method: "POST",
-        body: JSON.stringify({ url }),
-    });
 }
 
 export async function listPendingProposals(
@@ -351,25 +376,4 @@ export async function measureImpact(
 
 export async function getGscOpportunities() {
     return api("/gsc/opportunities");
-}
-
-/** Flujo compatible con backend actual: ciclo completo + recommend en análisis restantes */
-export async function runWordPressPipeline() {
-    const cycle = await runFullCycle(DEFAULT_WORDPRESS_URL);
-    const recommend = await recommendAll(true);
-
-    return {
-        audit: {
-            source: DEFAULT_WORDPRESS_URL,
-            total_found: recommend.total_analyses,
-            analyzed: recommend.total_analyses,
-            failed: 0,
-            results: [],
-        },
-        recommend: {
-            ...recommend,
-            total_proposals_created:
-                recommend.total_proposals_created + cycle.proposals_count,
-        },
-    };
 }

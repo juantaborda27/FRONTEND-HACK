@@ -7,8 +7,14 @@ export type ProposalType =
     | "ALT_TEXT_FIX"
     | "SCHEMA_MARKUP"
     | "GEO_INSIGHT";
-export type Severity = "high" | "medium" | "low";
-export type TriggerSource = "scrape" | "llm_probe" | "gsc";
+export type Severity = "high" | "medium" | "low" | "HIGH" | "MEDIUM" | "LOW";
+export type TriggerSource =
+    | "scrape"
+    | "llm_probe"
+    | "gsc"
+    | "SCRAPE"
+    | "LLM_PROBE"
+    | "GSC";
 export type PublishAction =
     | "create_post"
     | "patch_meta"
@@ -75,16 +81,82 @@ export interface AnalysisDetail extends AnalysisItem {
     proposals: Proposal[];
 }
 
+export interface FullCycleScrapeSummary {
+    char_count?: number;
+    word_count: number;
+    h2_count?: number;
+    has_structured_data: boolean;
+    has_faq_schema: boolean;
+    title?: string;
+    meta_description?: string;
+    h1?: string;
+    internal_links_count?: number;
+    images_without_alt?: number;
+}
+
 export interface RunFullCycleResponse {
     analysis_id: number;
     url: string;
-    seo_score?: number | null;
-    geo_score?: number | null;
+    seo_score: number;
+    geo_score: number;
     probe_results_count: number;
     proposals_count: number;
-    scrape_summary?: ScrapeSummary | null;
-    scrape_warning?: string | null;
+    scrape_warning: string | null;
+    scrape_summary: FullCycleScrapeSummary | null;
     proposals: Proposal[];
+}
+
+export interface SiteAuditResult {
+    analysis_id: number;
+    url: string;
+    seo_score: number;
+    geo_score: number;
+    status: AnalysisStatus;
+}
+
+export interface SiteRecommendResult {
+    analysis_id: number;
+    url: string;
+    proposals_created: number;
+    skipped: boolean;
+    error: string | null;
+    proposals: Proposal[];
+}
+
+export interface RunSiteCycleResponse {
+    source: string;
+    total_found: number;
+    analyzed: number;
+    audit_failed: number;
+    skipped: number;
+    processed: number;
+    recommend_failed: number;
+    total_proposals_created: number;
+    audit_results: SiteAuditResult[];
+    recommend_results: SiteRecommendResult[];
+}
+
+export interface RunSiteCycleRequest {
+    wordpress_url?: string | null;
+    include_posts?: boolean;
+    status?: "publish" | "draft" | "any";
+    skip_existing?: boolean;
+}
+
+export interface WordPressPipelineResult {
+    audit: {
+        source: string;
+        total_found: number;
+        analyzed: number;
+        failed: number;
+    };
+    recommend: {
+        total_analyses: number;
+        processed: number;
+        skipped: number;
+        failed: number;
+        total_proposals_created: number;
+    };
 }
 
 export interface WordPressPageResult {
@@ -119,10 +191,12 @@ export interface Proposal {
     analysis_id?: number;
     title: string;
     proposal_type: ProposalType | string;
-    severity: Severity;
+    severity: Severity | string;
     status: ProposalStatus | string;
     trigger_source: TriggerSource | string;
+    trigger_query?: string | null;
     summary?: string;
+    created_at?: string;
 }
 
 export interface RecommendResponse {
@@ -163,8 +237,8 @@ export interface ProposalPreview {
     proposal_type: ProposalType | string;
     title: string;
     summary: string;
-    severity: Severity;
-    status: ProposalStatus;
+    severity: Severity | string;
+    status: ProposalStatus | string;
     content_raw: string;
     content_html: string;
     publish_action: PublishAction;

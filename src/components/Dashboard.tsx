@@ -27,6 +27,7 @@ import type {
 import {
     approveProposal,
     checkHealth,
+    DEFAULT_WORDPRESS_URL,
     getNextProposalReview,
     listAnalyses,
     listPendingProposals,
@@ -35,8 +36,7 @@ import {
     runWordPressPipeline,
 } from "../lib/api";
 
-const WORDPRESS_URL =
-    "https://wordpress-production-d55e.up.railway.app";
+const WORDPRESS_URL = DEFAULT_WORDPRESS_URL.replace(/\/$/, "");
 
 const STEP_LABELS: Record<PipelineStep, string> = {
     idle: "",
@@ -161,10 +161,18 @@ export default function Dashboard() {
             );
         } catch (e) {
             setPipelineStep("error");
-            setError(
+            const msg =
                 e instanceof Error
                     ? e.message
-                    : "No se pudo completar la auditoría automática",
+                    : "No se pudo completar la auditoría automática";
+
+            // Si falló la IA pero el backend respondió, igual refrescamos datos existentes
+            await refreshData().catch(() => undefined);
+
+            setError(
+                /gemini|cuota|quota/i.test(msg)
+                    ? `${msg}\n\nEl frontend y el backend funcionan correctamente. La cuota diaria de Gemini (~20 req/día) está agotada. Puedes revisar propuestas ya generadas o reintentar mañana.`
+                    : msg,
             );
         } finally {
             setLoadingPipeline(false);
@@ -592,7 +600,7 @@ function AlertBox({
 
     return (
         <div
-            className={`mt-5 flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm ${cls}`}
+            className={`mt-5 flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm whitespace-pre-line ${cls}`}
         >
             <Icon className="mt-0.5 h-4 w-4 shrink-0" />
             {message}
