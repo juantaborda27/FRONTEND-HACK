@@ -2,10 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { Search, Sparkles, Globe2, BadgeCheck, AlertTriangle, Loader2 } from "lucide-react";
-import type { AuditResult } from "../lib/api";
+import type { AnalyzeResponse } from "../lib/types";
+import {
+  analyzeUrl,
+  runProbe,
+  generateRecommendations,
+} from "../lib/api";
 
 type Props = {
-    initialData?: AuditResult | null;
+    initialData?: AnalyzeResponse | null;
 };
 
 function StatCard({
@@ -49,7 +54,7 @@ function StatusPill({ status }: { status: string }) {
 
 export default function Dashboard({ initialData }: Props) {
     const [url, setUrl] = useState(initialData?.url ?? "");
-    const [data, setData] = useState<AuditResult | null>(initialData ?? null);
+    const [data, setData] = useState<AnalyzeResponse | null>(initialData ?? null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -64,36 +69,45 @@ export default function Dashboard({ initialData }: Props) {
     }, [data]);
 
     const handleDemoLoad = async () => {
+        if (!url) return;
+
         setLoading(true);
         setError(null);
 
         try {
-            // modo demo: no mostrar resultados reales todavía
-            await new Promise((r) => setTimeout(r, 1200));
 
-            const mocked: AuditResult = {
-                analysis_id: 9,
-                url: url || "https://bancoserfinanzas.kesug.com/wp/",
-                seo_score: 20,
-                geo_score: 0,
-                status: "completed",
-                scrape_summary: {
-                    title: "",
-                    meta_description: "",
-                    h1: "",
-                    word_count: 19,
-                    has_faq_schema: false,
-                    has_structured_data: false,
-                    internal_links_count: 0,
-                    images_without_alt: 0,
-                    scrape_warning: null,
-                },
-                scrape_warning: null,
-            };
+            // 1. ANALYZE
+            const analysis = await analyzeUrl(url);
 
-            setData(mocked);
+            setData(analysis);
+
+            // 2. PROBE
+            const probeResults = await runProbe(
+                analysis.analysis_id,
+                "¿qué tarjeta de crédito me conviene en Colombia?"
+            );
+
+            console.log("PROBE:", probeResults);
+
+            // 3. RECOMMEND
+            const recommendations =
+                await generateRecommendations(
+                    analysis.analysis_id
+                );
+
+            console.log(
+                "RECOMMENDATIONS:",
+                recommendations
+            );
+
         } catch (e) {
-            setError(e instanceof Error ? e.message : "No se pudo cargar");
+
+            setError(
+                e instanceof Error
+                    ? e.message
+                    : "No se pudo cargar"
+            );
+
         } finally {
             setLoading(false);
         }

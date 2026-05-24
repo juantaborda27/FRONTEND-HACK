@@ -1,60 +1,77 @@
-// src/lib/api.ts
-export type ScrapeSummary = {
-    title: string;
-    meta_description: string;
-    h1: string;
-    word_count: number;
-    has_faq_schema: boolean;
-    has_structured_data: boolean;
-    internal_links_count: number;
-    images_without_alt: number;
-    scrape_warning: string | null;
-};
+import { AnalyzeResponse, ProbeResult, Proposal } from "./types";
 
-export type AuditResult = {
-    analysis_id: number;
-    url: string;
-    seo_score: number;
-    geo_score: number;
-    status: string;
-    scrape_summary: ScrapeSummary;
-    scrape_warning: string | null;
-};
+const API = "http://localhost:8000";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-    const res = await fetch(`${API_BASE}${path}`, {
-        ...init,
+export async function analyzeUrl(url: string): Promise<AnalyzeResponse> {
+    const res = await fetch(`${API}/analyze`, {
+        method: "POST",
         headers: {
             "Content-Type": "application/json",
-            ...(init?.headers ?? {}),
         },
-        cache: "no-store",
+        body: JSON.stringify({ url }),
+    });
+
+    console.log("Response status:", res.status);
+    console.log("Response body:", await res.json());
+
+    if (!res.ok) {
+        throw new Error("Error analizando URL");
+    }
+
+    return res.json();
+}
+
+export async function getAnalysis(id: number) {
+    const res = await fetch(`${API}/analyses/${id}`);
+
+    if (!res.ok) {
+        throw new Error("Error obteniendo análisis");
+    }
+
+    return res.json();
+}
+
+export async function runProbe(
+    analysisId: number,
+    query: string,
+): Promise<ProbeResult[]> {
+    const res = await fetch(`${API}/probe/run`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify({
+            analysis_id: analysisId,
+            queries: [query],
+        }),
     });
 
     if (!res.ok) {
-        const message = await res.text().catch(() => "Error desconocido");
-        throw new Error(message || `Error HTTP ${res.status}`);
+        throw new Error("Error ejecutando probe");
     }
 
-    return res.json() as Promise<T>;
+    return res.json();
 }
 
-export const api = {
-    health: () => request<{ ok: boolean }>("/health"),
-    getAuditByUrl: (url: string) =>
-        request<AuditResult>(`/audit?url=${encodeURIComponent(url)}`),
+export async function generateRecommendations(analysisId: number): Promise<{
+    proposals_created: number;
+    proposals: Proposal[];
+}> {
+    const res = await fetch(`${API}/agent/recommend`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
 
-    // por ahora puedes dejar estos dos listos para cuando conectes acciones reales
-    approveAnalysis: (analysisId: number) =>
-        request<{ success: boolean }>(`/audit/${analysisId}/approve`, {
-            method: "POST",
+        body: JSON.stringify({
+            analysis_id: analysisId,
         }),
+    });
 
-    rejectAnalysis: (analysisId: number, reason: string) =>
-        request<{ success: boolean }>(`/audit/${analysisId}/reject`, {
-            method: "POST",
-            body: JSON.stringify({ reason }),
-        }),
-};
+    if (!res.ok) {
+        throw new Error("Error generando recomendaciones");
+    }
+
+    return res.json();
+}
