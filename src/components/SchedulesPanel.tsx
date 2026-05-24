@@ -33,7 +33,7 @@ export default function SchedulesPanel() {
 
     // Form state
     const [formUrl, setFormUrl] = useState("https://www.bancoserfinanza.com/");
-    const [formMinutes, setFormMinutes] = useState(60);
+    const [formMinutes, setFormMinutes] = useState(240);
     const [formLoading, setFormLoading] = useState(false);
 
     const load = useCallback(async () => {
@@ -103,8 +103,8 @@ export default function SchedulesPanel() {
     const handleRunNow = async (id: number) => {
         setActionId(id);
         try {
-            const res = await runScheduleNow(id);
-            flash(`Ciclo ejecutado: ${res.proposals_count} propuestas generadas.`, "success");
+            await runScheduleNow(id);
+            flash("Ciclo iniciado en background. Revisa la pestaña Auditoría en ~2 minutos.", "success");
             await load();
         } catch (err) {
             flash(err instanceof Error ? err.message : "Error al ejecutar ciclo", "error");
@@ -184,15 +184,21 @@ export default function SchedulesPanel() {
                         </label>
                         <input
                             type="number"
-                            min={1}
+                            min={30}
                             max={10080}
                             value={formMinutes}
                             onChange={(e) => setFormMinutes(Number(e.target.value))}
                             className="w-full rounded-xl border border-[#d9dceb] px-3 py-2 text-sm focus:border-[#1b1f8a] focus:outline-none"
                         />
                         <p className="mt-1 text-xs text-[#9ca3bf]">
-                            Mínimo 1 min · Máximo 10080 min (1 semana)
+                            Mínimo 30 min · Recomendado 240 min (4h) · Máximo 10080 min (1 semana)
                         </p>
+                        {formMinutes < 120 && (
+                            <p className="mt-1 flex items-center gap-1 text-xs text-amber-700">
+                                <AlertTriangle className="h-3 w-3 shrink-0" />
+                                Intervalos cortos agotan la cuota de Gemini (20 req/día). Recomendado: mínimo 4h.
+                            </p>
+                        )}
                     </div>
                     <div className="flex gap-2">
                         <button
