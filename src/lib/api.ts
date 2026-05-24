@@ -143,37 +143,23 @@ export async function runSiteCycle(
     });
 }
 
-/** Dispara el ciclo en background y hace polling hasta que termine */
-export async function runWordPressPipeline(): Promise<WordPressPipelineResult> {
-    // 1. Disparar ciclo async (devuelve 202 inmediatamente)
+/** Dispara el ciclo en background — devuelve 202 inmediatamente */
+export async function triggerCycle(): Promise<void> {
     await api("/agent/trigger", { method: "POST", body: JSON.stringify({}) });
+}
 
-    // 2. Polling cada 5s hasta que running=false (máx 4 min)
-    const MAX_POLLS = 48;
-    for (let i = 0; i < MAX_POLLS; i++) {
-        await new Promise((r) => setTimeout(r, 5000));
-        const status = await api<{
-            running: boolean;
-            last_result: { analyzed: number; total_proposals_created: number } | null;
-            last_error: string | null;
-        }>("/agent/trigger/status");
+/** Estado del ciclo en background */
+export async function getTriggerStatus(): Promise<{
+    running: boolean;
+    last_result: { analyzed: number; total_proposals_created: number } | null;
+    last_error: string | null;
+}> {
+    return api("/agent/trigger/status");
+}
 
-        if (!status.running) {
-            if (status.last_error) throw new Error(status.last_error);
-            const r = status.last_result ?? { analyzed: 0, total_proposals_created: 0 };
-            return {
-                audit: { source: "", total_found: r.analyzed, analyzed: r.analyzed, failed: 0 },
-                recommend: {
-                    total_analyses: r.analyzed,
-                    processed: r.analyzed,
-                    skipped: 0,
-                    failed: 0,
-                    total_proposals_created: r.total_proposals_created,
-                },
-            };
-        }
-    }
-    throw new Error("El ciclo tardó demasiado. Revisa el estado en el servidor.");
+/** @deprecated usar triggerCycle + getTriggerStatus desde Dashboard */
+export async function runWordPressPipeline(): Promise<WordPressPipelineResult> {
+    return { audit: { source: "", total_found: 0, analyzed: 0, failed: 0 }, recommend: { total_analyses: 0, processed: 0, skipped: 0, failed: 0, total_proposals_created: 0 } };
 }
 
 export async function analyzeWordPressPages(

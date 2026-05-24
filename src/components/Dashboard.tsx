@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Sparkles,
     Globe2,
@@ -30,11 +30,12 @@ import {
     checkHealth,
     DEFAULT_WORDPRESS_URL,
     getNextProposalReview,
+    getTriggerStatus,
     listAnalyses,
     listPendingProposals,
     measureImpact,
     rejectProposal,
-    runWordPressPipeline,
+    triggerCycle,
 } from "../lib/api";
 
 const WORDPRESS_URL = DEFAULT_WORDPRESS_URL.replace(/\/$/, "");
@@ -42,10 +43,10 @@ const WORDPRESS_URL = DEFAULT_WORDPRESS_URL.replace(/\/$/, "");
 const STEP_LABELS: Record<PipelineStep, string> = {
     idle: "",
     health: "Verificando conexión con el motor GEO...",
-    wordpress: "Auditando páginas y generando propuestas con IA... (puede tardar 2-3 min)",
-    recommend: "Finalizando recomendaciones...",
+    wordpress: "Auditando páginas WordPress...",
+    recommend: "Generando propuestas con IA...",
     loading_review: "Cargando propuestas para revisar...",
-    done: "Proceso completado",
+    done: "¡Proceso completado!",
     error: "Error en el proceso",
 };
 
@@ -55,9 +56,7 @@ export default function Dashboard() {
     const [apiOnline, setApiOnline] = useState<boolean | null>(null);
 
     const [preview, setPreview] = useState<ProposalPreview | null>(null);
-    const [lastApproved, setLastApproved] = useState<ApproveResponse | null>(
-        null,
-    );
+    const [lastApproved, setLastApproved] = useState<ApproveResponse | null>(null);
     const [impact, setImpact] = useState<MeasureImpactResponse | null>(null);
 
     const [pipelineStep, setPipelineStep] = useState<PipelineStep>("idle");
@@ -70,18 +69,21 @@ export default function Dashboard() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
+    // Ref para el intervalo de polling — no recrea el componente
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const stopPolling = useCallback(() => {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    }, []);
+
     const avgSeo = useMemo(() => {
         if (analyses.length === 0) return null;
-        return Math.round(
-            analyses.reduce((s, a) => s + a.seo_score, 0) / analyses.length,
-        );
+        return Math.round(analyses.reduce((s, a) => s + a.seo_score, 0) / analyses.length);
     }, [analyses]);
 
     const avgGeo = useMemo(() => {
         if (analyses.length === 0) return null;
-        return Math.round(
-            analyses.reduce((s, a) => s + a.geo_score, 0) / analyses.length,
-        );
+        return Math.round(analyses.reduce((s, a) => s + a.geo_score, 0) / analyses.length);
     }, [analyses]);
 
     const refreshData = useCallback(async () => {
@@ -117,67 +119,79 @@ export default function Dashboard() {
             } catch {
                 setApiOnline(false);
             }
-
             const pending = await refreshData();
-            if (pending > 0) {
-                await loadNextProposal();
-            }
+            if (pending > 0) await loadNextProposal();
             setLoadingInitial(false);
         }
         init();
-    }, [refreshData, loadNextProposal]);
+        return () => stopPolling();
+    }, [refreshData, loadNextProposal, stopPolling]);
 
     const handleRunPipeline = async () => {
+        stopPolling();
         setLoadingPipeline(true);
         setError(null);
         setSuccess(null);
         setPipelineStep("health");
 
         try {
+            // Paso 1 — health check
             await checkHealth();
+            setApiOnline(true);
+
+            // Paso 2 — disparar ciclo (devuelve 202 inmediato)
             setPipelineStep("wordpress");
+            await triggerCycle();
 
-            const { audit, recommend } = await runWordPressPipeline();
-
+            // Paso 3 — polling cada 5s hasta que el backend termine
             setPipelineStep("recommend");
+            let polls = 0;
+            const MAX = 72; // 72 × 5s = 6 minutos máx
 
-            if (
-                recommend.total_proposals_created === 0 &&
-                recommend.failed > 0
-            ) {
-                throw new Error(
-                    "No se generaron propuestas. Verifica la cuota de IA o reintenta.",
-                );
-            }
+            await new Promise<void>((resolve, reject) => {
+                pollRef.current = setInterval(async () => {
+                    polls++;
+                    try {
+                        const status = await getTriggerStatus();
 
+                        // Actualizar tabla de análisis en cada tick
+                        await refreshData().catch(() => undefined);
+
+                        if (!status.running) {
+                            stopPolling();
+                            if (status.last_error) { reject(new Error(status.last_error)); return; }
+                            resolve();
+                        } else if (polls >= MAX) {
+                            stopPolling();
+                            reject(new Error("El ciclo tardó demasiado. Intenta de nuevo."));
+                        }
+                    } catch (e) {
+                        stopPolling();
+                        reject(e);
+                    }
+                }, 5000);
+            });
+
+            // Paso 4 — cargar propuestas
             setPipelineStep("loading_review");
-            await refreshData();
-            await loadNextProposal();
+            const pending = await refreshData();
+            if (pending > 0) await loadNextProposal();
 
             setPipelineStep("done");
-            setSuccess(
-                recommend.total_proposals_created > 0
-                    ? `Auditoría completada: ${audit.analyzed} páginas analizadas, ${recommend.total_proposals_created} propuestas generadas.`
-                    : `Auditoría completada: ${audit.analyzed} páginas analizadas. Sin nuevas propuestas (cuota IA agotada o ya procesadas).`,
-            );
+            setSuccess(`Auditoría completada. ${pending} propuestas listas para revisar.`);
+
         } catch (e) {
+            stopPolling();
             setPipelineStep("error");
-            const msg =
-                e instanceof Error
-                    ? e.message
-                    : "No se pudo completar la auditoría automática";
-
-            // Si falló la IA pero el backend respondió, igual refrescamos datos existentes
+            const msg = e instanceof Error ? e.message : "Error en auditoría";
             await refreshData().catch(() => undefined);
-
-            setError(
-                /gemini|cuota|quota/i.test(msg)
-                    ? `${msg}\n\nEl frontend y el backend funcionan correctamente. La cuota diaria de Gemini (~20 req/día) está agotada. Puedes revisar propuestas ya generadas o reintentar mañana.`
-                    : msg,
+            setError(/gemini|cuota|quota/i.test(msg)
+                ? `Cuota de Gemini agotada. Revisa las propuestas ya generadas o espera mañana.`
+                : msg,
             );
         } finally {
             setLoadingPipeline(false);
-            setTimeout(() => setPipelineStep("idle"), 4000);
+            setTimeout(() => setPipelineStep("idle"), 5000);
         }
     };
 
