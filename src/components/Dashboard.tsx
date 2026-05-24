@@ -1,12 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Sparkles, Globe2, BadgeCheck, AlertTriangle, Loader2 } from "lucide-react";
-import type { AnalyzeResponse } from "../lib/types";
+import Image from "next/image";
 import {
-  analyzeUrl,
-  runProbe,
-  generateRecommendations,
+    Search,
+    Sparkles,
+    Globe2,
+    BadgeCheck,
+    AlertTriangle,
+    Loader2,
+    ShieldCheck,
+    FileText,
+} from "lucide-react";
+
+import type { AnalyzeResponse } from "../lib/types";
+
+import {
+    analyzeUrl,
+    runProbe,
+    generateRecommendations,
 } from "../lib/api";
 
 type Props = {
@@ -25,28 +37,40 @@ function StatCard({
     icon: React.ReactNode;
 }) {
     return (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-xl backdrop-blur">
+        <div className="rounded-3xl border border-[#d9dceb] bg-white p-6 shadow-sm transition hover:shadow-md">
             <div className="flex items-center justify-between">
-                <p className="text-sm text-white/60">{label}</p>
-                <div className="text-white/70">{icon}</div>
+                <p className="text-sm font-medium text-[#5b6280]">{label}</p>
+
+                <div className="rounded-xl bg-[#f4f6ff] p-2 text-[#1b1f8a]">
+                    {icon}
+                </div>
             </div>
-            <div className="mt-3 text-3xl font-semibold tracking-tight text-white">{value}</div>
-            <p className="mt-1 text-sm text-white/50">{hint}</p>
+
+            <div className="mt-4 text-4xl font-bold text-[#1b1f8a]">
+                {value}
+            </div>
+
+            <p className="mt-2 text-sm text-[#6f7693]">
+                {hint}
+            </p>
         </div>
     );
 }
 
 function StatusPill({ status }: { status: string }) {
     const s = status.toLowerCase();
+
     const cls =
         s === "completed"
-            ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
+            ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
             : s === "pending"
-                ? "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30"
-                : "bg-slate-500/15 text-slate-300 ring-1 ring-slate-500/30";
+                ? "bg-amber-100 text-amber-700 border border-amber-200"
+                : "bg-slate-100 text-slate-700 border border-slate-200";
 
     return (
-        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${cls}`}>
+        <span
+            className={`inline-flex items-center rounded-full px-4 py-1.5 text-xs font-semibold ${cls}`}
+        >
             {status}
         </span>
     );
@@ -54,8 +78,13 @@ function StatusPill({ status }: { status: string }) {
 
 export default function Dashboard({ initialData }: Props) {
     const [url, setUrl] = useState(initialData?.url ?? "");
-    const [data, setData] = useState<AnalyzeResponse | null>(initialData ?? null);
+
+    const [data, setData] = useState<AnalyzeResponse | null>(
+        initialData ?? null
+    );
+
     const [loading, setLoading] = useState(false);
+
     const [error, setError] = useState<string | null>(null);
 
     const scoreLabel = useMemo(() => {
@@ -68,16 +97,17 @@ export default function Dashboard({ initialData }: Props) {
         return `${data.geo_score}/100`;
     }, [data]);
 
-    const handleDemoLoad = async () => {
+    const handleAnalyze = async () => {
         if (!url) return;
 
         setLoading(true);
         setError(null);
 
         try {
-
             // 1. ANALYZE
             const analysis = await analyzeUrl(url);
+
+            console.log("ANALYSIS:", analysis);
 
             setData(analysis);
 
@@ -99,188 +129,319 @@ export default function Dashboard({ initialData }: Props) {
                 "RECOMMENDATIONS:",
                 recommendations
             );
-
         } catch (e) {
-
             setError(
                 e instanceof Error
                     ? e.message
-                    : "No se pudo cargar"
+                    : "No se pudo completar la auditoría"
             );
-
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <main className="min-h-screen bg-[#07111f] text-white">
-            <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-                <section className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 shadow-2xl">
-                    <div className="grid gap-8 p-6 md:grid-cols-[1.2fr_0.8fr] md:p-10">
-                        <div>
-                            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-200">
-                                <Sparkles className="h-3.5 w-3.5" />
-                                Serfinanza GEO Dashboard
-                            </div>
-
-                            <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">
-                                Auditoría SEO/GEO con una interfaz limpia y lista para demo
-                            </h1>
-
-                            <p className="mt-4 max-w-2xl text-sm leading-6 text-white/65 sm:text-base">
-                                Panel para revisar una URL, ver su estado de análisis y dejar preparado el flujo
-                                de aprobación sin publicar nada todavía.
-                            </p>
-
-                            <div className="mt-6 flex flex-wrap gap-3">
-                                <div className="flex w-full max-w-xl items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-2 backdrop-blur">
-                                    <Search className="ml-2 h-4 w-4 text-white/40" />
-                                    <input
-                                        value={url}
-                                        onChange={(e) => setUrl(e.target.value)}
-                                        placeholder="Pega aquí la URL a auditar"
-                                        className="w-full bg-transparent px-2 py-2 text-sm outline-none placeholder:text-white/35"
-                                    />
-                                    <button
-                                        onClick={handleDemoLoad}
-                                        disabled={loading}
-                                        className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                                        {loading ? "Cargando" : "Vista demo"}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {error ? (
-                                <div className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-                                    <AlertTriangle className="h-4 w-4" />
-                                    {error}
-                                </div>
-                            ) : null}
-                        </div>
-
-                        <div className="grid gap-4">
-                            <StatCard
-                                label="SEO Score"
-                                value={scoreLabel}
-                                hint="Puntuación de visibilidad técnica"
-                                icon={<Globe2 className="h-5 w-5" />}
-                            />
-                            <StatCard
-                                label="GEO Score"
-                                value={geoLabel}
-                                hint="Presencia / citabilidad en LLMs"
-                                icon={<BadgeCheck className="h-5 w-5" />}
-                            />
-                        </div>
+        <main className="min-h-screen bg-[#f5f7fc]">
+            {/* TOP BAR */}
+            <div className="bg-[#1b1f8a] text-white">
+                <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+                    <div className="flex items-center gap-3">
+                        <Image
+                            src="https://colombiafintech.co/wp-content/uploads/2025/06/serfinanza.png"
+                            alt="Serfinanza"
+                            width={180}
+                            height={60}
+                            priority
+                        />
                     </div>
-                </section>
+                </div>
+            </div>
 
-                <div className="mt-8 grid gap-6 lg:grid-cols-[1.4fr_0.9fr]">
-                    <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl backdrop-blur">
-                        <div className="flex items-center justify-between gap-4">
-                            <div>
-                                <h2 className="text-xl font-semibold">Detalle del análisis</h2>
-                                <p className="mt-1 text-sm text-white/50">
-                                    Aquí luego conectas la respuesta real del backend.
-                                </p>
+            {/* HERO */}
+            <section className="border-b border-[#dce2f0] bg-white">
+                <div className="mx-auto grid max-w-7xl gap-10 px-6 py-14 lg:grid-cols-[1.2fr_0.8fr]">
+                    <div>
+                        <div className="inline-flex items-center gap-2 rounded-full bg-[#eef1ff] px-4 py-2 text-sm font-medium text-[#1b1f8a]">
+                            <Sparkles className="h-4 w-4" />
+                            Plataforma GEO Intelligence
+                        </div>
+
+                        <h1 className="mt-6 text-4xl font-bold leading-tight text-[#1b1f8a] lg:text-6xl">
+                            Auditoría SEO y GEO para presencia en IA
+                        </h1>
+
+                        <p className="mt-5 max-w-2xl text-lg leading-8 text-[#5f6786]">
+                            Analiza sitios web, detecta oportunidades SEO/GEO y genera
+                            recomendaciones inteligentes para mejorar la citabilidad
+                            de Serfinanza en motores de IA y buscadores.
+                        </p>
+
+                        {/* SEARCH */}
+                        <div className="mt-8 flex flex-col gap-4 sm:flex-row">
+                            <div className="flex flex-1 items-center rounded-2xl border border-[#d9dceb] bg-white px-4 shadow-sm">
+                                <Search className="h-5 w-5 text-[#7a819f]" />
+
+                                <input
+                                    value={url}
+                                    onChange={(e) => setUrl(e.target.value)}
+                                    placeholder="https://ejemplo.com"
+                                    className="w-full bg-transparent px-3 py-4 text-[#1b1f8a] outline-none placeholder:text-[#9ca3bf]"
+                                />
                             </div>
-                            {data ? <StatusPill status={data.status} /> : <StatusPill status="idle" />}
+
+                            <button
+                                onClick={handleAnalyze}
+                                disabled={loading}
+                                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#d7264f] px-7 py-4 font-semibold text-white transition hover:bg-[#bc1f44] disabled:opacity-60"
+                            >
+                                {loading ? (
+                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                ) : (
+                                    <ShieldCheck className="h-5 w-5" />
+                                )}
+
+                                {loading ? "Analizando..." : "Auditar sitio"}
+                            </button>
+                        </div>
+
+                        {error ? (
+                            <div className="mt-5 flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                <AlertTriangle className="h-4 w-4" />
+                                {error}
+                            </div>
+                        ) : null}
+                    </div>
+
+                    {/* SCORE CARDS */}
+                    <div className="grid gap-5">
+                        <StatCard
+                            label="SEO Score"
+                            value={scoreLabel}
+                            hint="Optimización técnica del sitio"
+                            icon={<Globe2 className="h-5 w-5" />}
+                        />
+
+                        <StatCard
+                            label="GEO Score"
+                            value={geoLabel}
+                            hint="Visibilidad en motores de IA"
+                            icon={<BadgeCheck className="h-5 w-5" />}
+                        />
+                    </div>
+                </div>
+            </section>
+
+            {/* CONTENT */}
+            <div className="mx-auto mt-10 grid max-w-7xl gap-8 px-6 pb-14 lg:grid-cols-[1.5fr_0.8fr]">
+                {/* MAIN */}
+                <section className="rounded-3xl border border-[#d9dceb] bg-white p-8 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                            <h2 className="text-2xl font-bold text-[#1b1f8a]">
+                                Resultado de auditoría
+                            </h2>
+
+                            <p className="mt-2 text-sm text-[#69718f]">
+                                Información obtenida desde el motor de análisis GEO.
+                            </p>
                         </div>
 
                         {data ? (
-                            <div className="mt-6 space-y-5">
-                                <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
-                                    <p className="text-xs uppercase tracking-[0.2em] text-white/40">URL</p>
-                                    <p className="mt-2 break-all text-sm text-white/90">{data.url}</p>
-                                </div>
-
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                    <InfoBlock title="Analysis ID" value={data.analysis_id} />
-                                    <InfoBlock title="Word count" value={data.scrape_summary.word_count} />
-                                    <InfoBlock
-                                        title="H1"
-                                        value={data.scrape_summary.h1 || "Sin H1 detectado"}
-                                    />
-                                    <InfoBlock
-                                        title="Meta description"
-                                        value={data.scrape_summary.meta_description || "No encontrada"}
-                                    />
-                                    <InfoBlock
-                                        title="FAQ schema"
-                                        value={data.scrape_summary.has_faq_schema ? "Sí" : "No"}
-                                    />
-                                    <InfoBlock
-                                        title="Structured data"
-                                        value={data.scrape_summary.has_structured_data ? "Sí" : "No"}
-                                    />
-                                </div>
-                            </div>
+                            <StatusPill status={data.status} />
                         ) : (
-                            <div className="mt-10 grid place-items-center rounded-2xl border border-dashed border-white/10 bg-slate-950/30 px-6 py-16 text-center">
-                                <div className="max-w-md">
-                                    <Sparkles className="mx-auto h-10 w-10 text-cyan-300/80" />
-                                    <p className="mt-4 text-lg font-medium">Vista vacía lista para integrar</p>
-                                    <p className="mt-2 text-sm text-white/50">
-                                        Pulsa “Vista demo” para renderizar un ejemplo visual sin mostrar todavía el
-                                        resultado real de tu API.
-                                    </p>
-                                </div>
-                            </div>
+                            <StatusPill status="idle" />
                         )}
-                    </section>
+                    </div>
 
-                    <aside className="space-y-6">
-                        <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl backdrop-blur">
-                            <h3 className="text-lg font-semibold">Estado visual</h3>
-                            <div className="mt-4 space-y-3 text-sm text-white/70">
-                                <Row label="Imágenes sin alt" value={data?.scrape_summary.images_without_alt ?? "—"} />
-                                <Row label="Enlaces internos" value={data?.scrape_summary.internal_links_count ?? "—"} />
-                                <Row
-                                    label="Disclaimers"
-                                    value="Preparado para incluir mensajes regulatorios"
+                    {data ? (
+                        <div className="mt-8 space-y-6">
+                            {/* URL */}
+                            <div className="rounded-2xl border border-[#e4e8f4] bg-[#f9faff] p-5">
+                                <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#7b84a3]">
+                                    URL auditada
+                                </p>
+
+                                <p className="mt-3 break-all text-sm text-[#1b1f8a]">
+                                    {data.url}
+                                </p>
+                            </div>
+
+                            {/* GRID */}
+                            <div className="grid gap-5 md:grid-cols-2">
+                                <InfoBlock
+                                    title="Título"
+                                    value={
+                                        data.scrape_summary.title || "No encontrado"
+                                    }
+                                />
+
+                                <InfoBlock
+                                    title="H1"
+                                    value={
+                                        data.scrape_summary.h1 ||
+                                        "No encontrado"
+                                    }
+                                />
+
+                                <InfoBlock
+                                    title="Meta description"
+                                    value={
+                                        data.scrape_summary.meta_description ||
+                                        "No encontrada"
+                                    }
+                                />
+
+                                <InfoBlock
+                                    title="Cantidad de palabras"
+                                    value={data.scrape_summary.word_count}
+                                />
+
+                                <InfoBlock
+                                    title="FAQ Schema"
+                                    value={
+                                        data.scrape_summary.has_faq_schema
+                                            ? "Sí"
+                                            : "No"
+                                    }
+                                />
+
+                                <InfoBlock
+                                    title="Structured Data"
+                                    value={
+                                        data.scrape_summary.has_structured_data
+                                            ? "Sí"
+                                            : "No"
+                                    }
                                 />
                             </div>
-                        </section>
 
-                        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-cyan-500/15 to-indigo-500/10 p-6 shadow-xl backdrop-blur">
-                            <h3 className="text-lg font-semibold">Próximo paso</h3>
-                            <p className="mt-2 text-sm text-white/70">
-                                Luego puedes enchufar botones de aprobar / rechazar para cumplir el flujo del
-                                reto.
+                            {/* WARNING */}
+                            {data.scrape_warning ? (
+                                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                                    ⚠ {data.scrape_warning}
+                                </div>
+                            ) : null}
+                        </div>
+                    ) : (
+                        <div className="mt-10 rounded-3xl border border-dashed border-[#d5daeb] bg-[#fafbff] px-8 py-20 text-center">
+                            <FileText className="mx-auto h-14 w-14 text-[#1b1f8a]" />
+
+                            <h3 className="mt-5 text-2xl font-bold text-[#1b1f8a]">
+                                Listo para comenzar
+                            </h3>
+
+                            <p className="mx-auto mt-3 max-w-md text-[#6b7392]">
+                                Ingresa una URL y ejecuta una auditoría GEO
+                                para visualizar métricas SEO, citabilidad y
+                                recomendaciones inteligentes.
                             </p>
-                            <div className="mt-5 flex gap-3">
-                                <button className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-slate-950">
-                                    Aprobar
-                                </button>
-                                <button className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white">
-                                    Rechazar
-                                </button>
-                            </div>
-                        </section>
-                    </aside>
-                </div>
+                        </div>
+                    )}
+                </section>
+
+                {/* SIDEBAR */}
+                <aside className="space-y-6">
+                    <section className="rounded-3xl border border-[#d9dceb] bg-white p-6 shadow-sm">
+                        <h3 className="text-xl font-bold text-[#1b1f8a]">
+                            Estado visual
+                        </h3>
+
+                        <div className="mt-5 space-y-4">
+                            <Row
+                                label="Imágenes sin ALT"
+                                value={
+                                    data?.scrape_summary.images_without_alt ??
+                                    "—"
+                                }
+                            />
+
+                            <Row
+                                label="Links internos"
+                                value={
+                                    data?.scrape_summary
+                                        .internal_links_count ?? "—"
+                                }
+                            />
+
+                            <Row
+                                label="Estado GEO"
+                                value={
+                                    data
+                                        ? data.geo_score > 50
+                                            ? "Bueno"
+                                            : "Mejorable"
+                                        : "—"
+                                }
+                            />
+                        </div>
+                    </section>
+
+                    <section className="overflow-hidden rounded-3xl bg-[#1b1f8a] p-6 text-white shadow-lg">
+                        <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">
+                            IA + SEO
+                        </div>
+
+                        <h3 className="mt-4 text-2xl font-bold">
+                            Próximo paso
+                        </h3>
+
+                        <p className="mt-3 text-sm leading-7 text-white/75">
+                            Integra aquí el flujo de aprobación,
+                            publicación y seguimiento de propuestas GEO.
+                        </p>
+
+                        <div className="mt-6 flex gap-3">
+                            <button className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-[#1b1f8a] transition hover:bg-[#f1f3ff]">
+                                Aprobar
+                            </button>
+
+                            <button className="rounded-2xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/20">
+                                Rechazar
+                            </button>
+                        </div>
+                    </section>
+                </aside>
             </div>
         </main>
     );
 }
 
-function InfoBlock({ title, value }: { title: string; value: string | number }) {
+function InfoBlock({
+    title,
+    value,
+}: {
+    title: string;
+    value: string | number;
+}) {
     return (
-        <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
-            <p className="text-xs uppercase tracking-[0.2em] text-white/35">{title}</p>
-            <p className="mt-2 text-sm leading-6 text-white/90">{value}</p>
+        <div className="rounded-2xl border border-[#e3e7f2] bg-[#fafbff] p-5">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#7b84a3]">
+                {title}
+            </p>
+
+            <p className="mt-3 text-sm leading-7 text-[#1b1f8a]">
+                {value}
+            </p>
         </div>
     );
 }
 
-function Row({ label, value }: { label: string; value: string | number }) {
+function Row({
+    label,
+    value,
+}: {
+    label: string;
+    value: string | number;
+}) {
     return (
-        <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3">
-            <span className="text-white/55">{label}</span>
-            <span className="font-medium text-white">{value}</span>
+        <div className="flex items-center justify-between rounded-2xl border border-[#e5e8f3] bg-[#fafbff] px-4 py-4">
+            <span className="text-sm font-medium text-[#6d7594]">
+                {label}
+            </span>
+
+            <span className="text-sm font-bold text-[#1b1f8a]">
+                {value}
+            </span>
         </div>
     );
 }

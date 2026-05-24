@@ -1,5 +1,4 @@
 export interface AnalyzeResponse {
-    analysis_id: number;
     url: string;
     seo_score: number;
     geo_score: number;
@@ -14,9 +13,13 @@ export interface AnalyzeResponse {
         has_structured_data: boolean;
         internal_links_count: number;
         images_without_alt: number;
+        scrape_warning: string | null;
     };
 
     scrape_warning?: string | null;
+
+    // importante:
+    analysis_id: number;
 }
 
 export interface ProbeResult {
