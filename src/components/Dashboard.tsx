@@ -14,27 +14,20 @@ import {
 } from "lucide-react";
 
 import AnalysesTable from "./AnalysesTable";
-import ProposalEditor from "./ProposalEditor";
+import ProposalReviewPanel from "./ProposalReviewPanel";
 import SchedulesPanel from "./SchedulesPanel";
 
 import type {
     AnalysisItem,
-    ApproveResponse,
-    MeasureImpactResponse,
     PipelineStep,
-    ProposalPreview,
 } from "../lib/types";
 
 import {
-    approveProposal,
     checkHealth,
     DEFAULT_WORDPRESS_URL,
-    getNextProposalReview,
     getTriggerStatus,
     listAnalyses,
     listPendingProposals,
-    measureImpact,
-    rejectProposal,
     triggerCycle,
 } from "../lib/api";
 
@@ -55,16 +48,9 @@ export default function Dashboard() {
     const [pendingCount, setPendingCount] = useState(0);
     const [apiOnline, setApiOnline] = useState<boolean | null>(null);
 
-    const [preview, setPreview] = useState<ProposalPreview | null>(null);
-    const [lastApproved, setLastApproved] = useState<ApproveResponse | null>(null);
-    const [impact, setImpact] = useState<MeasureImpactResponse | null>(null);
-
     const [pipelineStep, setPipelineStep] = useState<PipelineStep>("idle");
     const [loadingInitial, setLoadingInitial] = useState(true);
     const [loadingPipeline, setLoadingPipeline] = useState(false);
-    const [loadingPreview, setLoadingPreview] = useState(false);
-    const [actionLoading, setActionLoading] = useState(false);
-    const [impactLoading, setImpactLoading] = useState(false);
 
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -97,20 +83,6 @@ export default function Dashboard() {
         return pendingRes.total;
     }, []);
 
-    const loadNextProposal = useCallback(async () => {
-        setLoadingPreview(true);
-        setImpact(null);
-        setLastApproved(null);
-        try {
-            const next = await getNextProposalReview();
-            setPreview(next);
-        } catch {
-            setPreview(null);
-        } finally {
-            setLoadingPreview(false);
-        }
-    }, []);
-
     useEffect(() => {
         async function init() {
             setLoadingInitial(true);
@@ -120,13 +92,12 @@ export default function Dashboard() {
             } catch {
                 setApiOnline(false);
             }
-            const pending = await refreshData();
-            if (pending > 0) await loadNextProposal();
+            await refreshData();
             setLoadingInitial(false);
         }
         init();
         return () => stopPolling();
-    }, [refreshData, loadNextProposal, stopPolling]);
+    }, [refreshData, stopPolling]);
 
     const handleRunPipeline = async () => {
         stopPolling();
@@ -173,10 +144,9 @@ export default function Dashboard() {
                 }, 5000);
             });
 
-            // Paso 4 — cargar propuestas
+            // Paso 4 — refrescar datos
             setPipelineStep("loading_review");
             const pending = await refreshData();
-            if (pending > 0) await loadNextProposal();
 
             setPipelineStep("done");
             setSuccess(`Auditoría completada. ${pending} propuestas listas para revisar.`);
@@ -193,71 +163,6 @@ export default function Dashboard() {
         } finally {
             setLoadingPipeline(false);
             setTimeout(() => setPipelineStep("idle"), 5000);
-        }
-    };
-
-    const handleApprove = async () => {
-        if (!preview) return;
-        setActionLoading(true);
-        setError(null);
-        setSuccess(null);
-
-        try {
-            const result = await approveProposal(preview.id);
-            setLastApproved(result);
-            setSuccess(
-                result.wp_published_url
-                    ? `Publicado en WordPress: ${result.wp_published_url}`
-                    : "Propuesta aprobada correctamente.",
-            );
-
-            setImpactLoading(true);
-            try {
-                const impactResult = await measureImpact(preview.id);
-                setImpact(impactResult);
-            } catch {
-                /* impacto opcional */
-            } finally {
-                setImpactLoading(false);
-            }
-
-            const remaining = await refreshData();
-            if (remaining > 0) {
-                await loadNextProposal();
-            } else {
-                setPreview(null);
-            }
-        } catch (e) {
-            setError(
-                e instanceof Error ? e.message : "Error al aprobar propuesta",
-            );
-        } finally {
-            setActionLoading(false);
-        }
-    };
-
-    const handleReject = async (reason: string) => {
-        if (!preview) return;
-        setActionLoading(true);
-        setError(null);
-        setSuccess(null);
-
-        try {
-            await rejectProposal(preview.id, reason);
-            setSuccess("Propuesta rechazada. La IA aprenderá de tu feedback.");
-
-            const remaining = await refreshData();
-            if (remaining > 0) {
-                await loadNextProposal();
-            } else {
-                setPreview(null);
-            }
-        } catch (e) {
-            setError(
-                e instanceof Error ? e.message : "Error al rechazar propuesta",
-            );
-        } finally {
-            setActionLoading(false);
         }
     };
 
@@ -301,59 +206,39 @@ export default function Dashboard() {
                 </div>
             </section>
 
-            <div className="mx-auto mt-10 grid max-w-7xl gap-8 px-6 pb-14 lg:grid-cols-[1.5fr_0.8fr]">
-                <section className="rounded-3xl border border-[#d9dceb] bg-white p-8 shadow-sm">
+            {/* Tabla de análisis + Scheduler */}
+            <div className="mx-auto mt-8 grid max-w-7xl gap-6 px-6 lg:grid-cols-[1fr_340px]">
+                <section className="rounded-3xl border border-[#d9dceb] bg-white p-7 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <SectionTitle />
                         <span className="rounded-full bg-[#eef1ff] px-4 py-1.5 text-xs font-semibold text-[#1b1f8a]">
                             {analyses.length} páginas
                         </span>
                     </div>
-                    <div className="mt-6">
+                    <div className="mt-5">
                         <AnalysesTable items={analyses} loading={loadingInitial} />
                     </div>
                 </section>
-
                 <aside className="space-y-6">
-                    <ProposalEditor
-                        preview={preview}
-                        loading={loadingPreview}
-                        actionLoading={actionLoading || impactLoading}
-                        onApprove={handleApprove}
-                        onReject={handleReject}
-                        impact={impact}
-                        emptyMessage={
-                            pendingCount === 0
-                                ? "Ejecuta la auditoría automática para generar propuestas."
-                                : "Cargando siguiente propuesta..."
-                        }
-                    />
-
-                    {lastApproved?.wp_published_url ? (
-                        <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
-                            <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
-                                <CheckCircle2 className="h-4 w-4" />
-                                Última publicación
-                            </div>
-                            <a
-                                href={lastApproved.wp_published_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mt-2 block break-all text-xs text-emerald-700 underline"
-                            >
-                                {lastApproved.wp_published_url}
-                            </a>
-                        </section>
-                    ) : null}
-
                     <FlowChecklist
                         analysesCount={analyses.length}
                         pendingCount={pendingCount}
-                        hasImpact={!!impact}
                     />
-
                     <SchedulesPanel />
                 </aside>
+            </div>
+
+            {/* Panel de revisión de propuestas */}
+            <div className="mx-auto mt-6 max-w-7xl px-6 pb-14">
+                <div className="mb-5 flex items-center gap-3">
+                    <h2 className="text-2xl font-bold text-[#1b1f8a]">Revisión de propuestas</h2>
+                    {pendingCount > 0 && (
+                        <span className="rounded-full bg-[#0170B9] px-3 py-1 text-xs font-bold text-white">
+                            {pendingCount} pendientes
+                        </span>
+                    )}
+                </div>
+                <ProposalReviewPanel onApproved={refreshData} />
             </div>
         </main>
     );
@@ -488,35 +373,21 @@ function StatCard({
 function FlowChecklist({
     analysesCount,
     pendingCount,
-    hasImpact,
 }: {
     analysesCount: number;
     pendingCount: number;
-    hasImpact: boolean;
 }) {
     return (
         <section className="rounded-3xl border border-[#d9dceb] bg-white p-6 shadow-sm">
-            <h3 className="text-xl font-bold text-[#1b1f8a]">Flujo automático</h3>
+            <h3 className="text-lg font-bold text-[#1b1f8a]">Flujo GEO Copilot</h3>
             <ol className="mt-4 space-y-3 text-sm text-[#6f7693]">
-                <FlowStep
-                    n={1}
-                    label="Auditar sitio WordPress"
-                    done={analysesCount > 0}
-                />
-                <FlowStep
-                    n={2}
-                    label="Generar recomendaciones IA"
-                    done={pendingCount > 0 || analysesCount > 0}
-                />
-                <FlowStep
-                    n={3}
-                    label="Revisar y aprobar propuestas"
-                    active={pendingCount > 0}
-                />
-                <FlowStep n={4} label="Medir impacto GEO" done={hasImpact} />
+                <FlowStep n={1} label="Auditar URL con IA" done={analysesCount > 0} />
+                <FlowStep n={2} label="Generar propuestas" done={pendingCount > 0 || analysesCount > 0} />
+                <FlowStep n={3} label="Aprobar y publicar" active={pendingCount > 0} />
+                <FlowStep n={4} label="Monitoreo automático" />
             </ol>
             <p className="mt-4 text-xs text-[#9ca3bf]">
-                Sitio: {WORDPRESS_URL.replace(/^https?:\/\//, "")}
+                {WORDPRESS_URL.replace(/^https?:\/\//, "")}
             </p>
         </section>
     );
