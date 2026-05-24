@@ -227,7 +227,7 @@ function EditorBody({
 function PreviewPanel({ html }: { html: string }) {
     return (
         <div
-            className="max-h-[320px] overflow-y-auto p-4"
+            className="max-h-[480px] overflow-y-auto p-5 text-sm leading-relaxed"
             dangerouslySetInnerHTML={{ __html: html }}
         />
     );

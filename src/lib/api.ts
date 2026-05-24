@@ -315,43 +315,18 @@ export async function getProposalDetail(id: number): Promise<ProposalDetail> {
     return api<ProposalDetail>(`/proposals/${id}`);
 }
 
+/** Llama al endpoint real del backend que devuelve HTML con estilos Serfinanza */
+export async function getProposalPreview(id: number): Promise<ProposalPreview> {
+    return api<ProposalPreview>(`/proposals/${id}/preview`);
+}
+
 export async function getNextProposalReview(): Promise<ProposalPreview> {
     const pending = await listPendingProposals(50);
     if (pending.items.length === 0) {
         throw new Error("Cola vacía");
     }
-
-    const first = pending.items[0];
-    const detail = await getProposalDetail(first.id);
-
-    let analysisUrl = "";
-    if (detail.analysis_id) {
-        try {
-            const analysis = await getAnalysis(detail.analysis_id);
-            analysisUrl = analysis.url;
-        } catch {
-            analysisUrl = "";
-        }
-    }
-
-    return mapProposalToPreview(detail, pending.total, analysisUrl);
-}
-
-export async function getProposalPreview(
-    id: number,
-): Promise<ProposalPreview> {
-    const detail = await getProposalDetail(id);
-    const pending = await listPendingProposals(50);
-    let analysisUrl = "";
-    if (detail.analysis_id) {
-        try {
-            const analysis = await getAnalysis(detail.analysis_id);
-            analysisUrl = analysis.url;
-        } catch {
-            analysisUrl = "";
-        }
-    }
-    return mapProposalToPreview(detail, pending.total, analysisUrl);
+    // Usa el endpoint de preview real para obtener HTML estilizado
+    return getProposalPreview(pending.items[0].id);
 }
 
 export async function approveProposal(id: number): Promise<ApproveResponse> {
