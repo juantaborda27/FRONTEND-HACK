@@ -11,6 +11,7 @@ import {
     Activity,
     Clock,
     CheckCircle2,
+    Trash2,
 } from "lucide-react";
 
 import AnalysesTable from "./AnalysesTable";
@@ -28,6 +29,7 @@ import {
     getTriggerStatus,
     listAnalyses,
     listPendingProposals,
+    resetDatabase,
     triggerCycle,
 } from "../lib/api";
 
@@ -55,6 +57,7 @@ export default function Dashboard() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [auditUrl, setAuditUrl] = useState("https://www.bancoserfinanza.com/");
+    const [resetting, setResetting] = useState(false);
 
     // Ref para el intervalo de polling — no recrea el componente
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -64,13 +67,15 @@ export default function Dashboard() {
     }, []);
 
     const avgSeo = useMemo(() => {
-        if (analyses.length === 0) return null;
-        return Math.round(analyses.reduce((s, a) => s + a.seo_score, 0) / analyses.length);
+        const valid = analyses.filter((a) => a.seo_score != null);
+        if (valid.length === 0) return null;
+        return Math.round(valid.reduce((s, a) => s + (a.seo_score ?? 0), 0) / valid.length);
     }, [analyses]);
 
     const avgGeo = useMemo(() => {
-        if (analyses.length === 0) return null;
-        return Math.round(analyses.reduce((s, a) => s + a.geo_score, 0) / analyses.length);
+        const valid = analyses.filter((a) => a.geo_score != null);
+        if (valid.length === 0) return null;
+        return Math.round(valid.reduce((s, a) => s + (a.geo_score ?? 0), 0) / valid.length);
     }, [analyses]);
 
     const refreshData = useCallback(async () => {
@@ -98,6 +103,22 @@ export default function Dashboard() {
         init();
         return () => stopPolling();
     }, [refreshData, stopPolling]);
+
+    const handleReset = async () => {
+        if (!window.confirm("¿Seguro que deseas limpiar TODA la base de datos? Se eliminarán análisis y propuestas.")) return;
+        setResetting(true);
+        setError(null);
+        setSuccess(null);
+        try {
+            const res = await resetDatabase();
+            await refreshData();
+            setSuccess(res.message);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Error al limpiar la base de datos");
+        } finally {
+            setResetting(false);
+        }
+    };
 
     const handleRunPipeline = async () => {
         stopPolling();
@@ -182,6 +203,8 @@ export default function Dashboard() {
                         auditUrl={auditUrl}
                         onAuditUrlChange={setAuditUrl}
                         onRunPipeline={handleRunPipeline}
+                        onReset={handleReset}
+                        resetting={resetting}
                     />
                     <div className="grid gap-5">
                         <StatCard
@@ -289,6 +312,8 @@ function HeroPanel({
     auditUrl,
     onAuditUrlChange,
     onRunPipeline,
+    onReset,
+    resetting,
 }: {
     isBusy: boolean;
     pipelineStep: PipelineStep;
@@ -297,6 +322,8 @@ function HeroPanel({
     auditUrl: string;
     onAuditUrlChange: (v: string) => void;
     onRunPipeline: () => void;
+    onReset: () => void;
+    resetting: boolean;
 }) {
     return (
         <div>
@@ -334,6 +361,19 @@ function HeroPanel({
                         <Zap className="h-5 w-5" />
                     )}
                     {isBusy ? STEP_LABELS[pipelineStep] || "Procesando..." : "Auditar"}
+                </button>
+                <button
+                    onClick={onReset}
+                    disabled={isBusy || resetting}
+                    title="Limpiar base de datos"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-5 py-4 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-40"
+                >
+                    {resetting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                        <Trash2 className="h-4 w-4" />
+                    )}
+                    Limpiar BD
                 </button>
             </div>
 

@@ -350,6 +350,10 @@ export async function getGscOpportunities() {
     return api("/gsc/opportunities");
 }
 
+export async function resetDatabase(): Promise<{ status: string; message: string; deleted: Record<string, number | string> }> {
+    return api("/admin/reset", { method: "POST" });
+}
+
 // ── Schedules ────────────────────────────────────────────────────────────────
 
 export async function listSchedules(): Promise<ScheduleListResponse> {
